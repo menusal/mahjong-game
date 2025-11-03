@@ -1,27 +1,19 @@
 import { useCallback, useEffect, useState, useRef } from "react";
 import * as Tone from "tone";
+import { Midi } from "@tonejs/midi";
 
-// Chinese pentatonic scale (C major pentatonic: C, D, E, G, A)
-const CHINESE_PENTATONIC_SCALE = [
-  "C4",
-  "D4",
-  "E4",
-  "G4",
-  "A4",
-  "C5",
-  "D5",
-  "E5",
-  "G5",
-  "A5",
-];
+// MIDI file URL - served from public folder
+const MIDI_FILE_URL = "/sounds/Er_Quan_Yang_Yue.mid";
 
 export const useChineseBackgroundMusic = (enabled = true, volume = -25) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
-  const synthRef = useRef(null);
+  const midiRef = useRef(null);
   const reverbRef = useRef(null);
   const volumeRef = useRef(null);
-  const sequenceRef = useRef(null);
+  const synthsRef = useRef([]);
+  const scheduledEventsRef = useRef([]);
+  const loopIdRef = useRef(null);
 
   useEffect(() => {
     if (!enabled) return;
@@ -38,36 +30,64 @@ export const useChineseBackgroundMusic = (enabled = true, volume = -25) => {
         // Create volume control
         const vol = new Tone.Volume(volume).connect(reverb);
 
-        // Create a plucked string synth (sounds more like Chinese instruments like guzheng or pipa)
-        const synth = new Tone.PluckSynth({
-          attackNoise: 0.7,
-          resonance: 0.95,
-          dampening: 4000,
-        }).connect(vol);
-
         await reverb.generate();
 
-        synthRef.current = synth;
-        reverbRef.current = reverb;
-        volumeRef.current = vol;
+        // Load and parse MIDI file
+        try {
+          const absoluteUrl = new URL(MIDI_FILE_URL, window.location.href).href;
+          console.log("Loading MIDI file from:", absoluteUrl);
 
-        setIsInitialized(true);
+          const response = await fetch(absoluteUrl);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch MIDI file: ${response.statusText}`);
+          }
+
+          const arrayBuffer = await response.arrayBuffer();
+          const midi = new Midi(arrayBuffer);
+
+          console.log("MIDI file loaded successfully", {
+            duration: midi.duration,
+            tracks: midi.tracks.length,
+          });
+
+          midiRef.current = midi;
+          reverbRef.current = reverb;
+          volumeRef.current = vol;
+
+          setIsInitialized(true);
+        } catch (error) {
+          console.error("Failed to load MIDI file:", error);
+          // Still set initialized to true to avoid blocking the app
+          setIsInitialized(true);
+        }
       } catch (error) {
         console.error("Failed to initialize Chinese background music:", error);
+        setIsInitialized(true);
       }
     };
 
     initializeMusic();
 
     return () => {
-      // Cleanup
-      if (sequenceRef.current) {
-        sequenceRef.current.stop();
-        sequenceRef.current.dispose();
+      // Cleanup - clear scheduled events directly
+      scheduledEventsRef.current.forEach((eventId) => {
+        Tone.Transport.clear(eventId);
+      });
+      scheduledEventsRef.current = [];
+
+      // Stop and dispose all synths
+      synthsRef.current.forEach((synth) => {
+        synth.releaseAll();
+        synth.dispose();
+      });
+      synthsRef.current = [];
+
+      // Clear loop event
+      if (loopIdRef.current !== null) {
+        Tone.Transport.clear(loopIdRef.current);
+        loopIdRef.current = null;
       }
-      if (synthRef.current) {
-        synthRef.current.dispose();
-      }
+
       if (reverbRef.current) {
         reverbRef.current.dispose();
       }
@@ -77,12 +97,95 @@ export const useChineseBackgroundMusic = (enabled = true, volume = -25) => {
     };
   }, [enabled, volume]);
 
-  const startMusic = useCallback(async () => {
-    if (!isInitialized || !synthRef.current) {
-      console.log("Music not initialized yet or synth not ready", {
-        isInitialized,
-        synthReady: !!synthRef.current,
+  const clearScheduledEvents = useCallback(() => {
+    // Clear all scheduled events
+    scheduledEventsRef.current.forEach((eventId) => {
+      Tone.Transport.clear(eventId);
+    });
+    scheduledEventsRef.current = [];
+
+    // Stop and dispose all synths
+    synthsRef.current.forEach((synth) => {
+      synth.releaseAll();
+      synth.dispose();
+    });
+    synthsRef.current = [];
+
+    // Clear loop event
+    if (loopIdRef.current !== null) {
+      Tone.Transport.clear(loopIdRef.current);
+      loopIdRef.current = null;
+    }
+  }, []);
+
+  const stopMusic = useCallback(() => {
+    clearScheduledEvents();
+    setIsPlaying(false);
+    console.log("Chinese background music stopped");
+  }, [clearScheduledEvents]);
+
+  const scheduleMidiPlayback = useCallback((startTime = 0) => {
+    if (!midiRef.current) {
+      console.error("MIDI file not loaded");
+      return;
+    }
+
+    // Clear any existing scheduled events first
+    clearScheduledEvents();
+
+    const midi = midiRef.current;
+    const synths = [];
+    const eventIds = [];
+
+    // Create a synth for each track
+    midi.tracks.forEach((track, trackIndex) => {
+      if (track.notes.length === 0) return; // Skip empty tracks
+
+      // Use PluckSynth for a more authentic Chinese instrument sound
+      const synth = new Tone.PluckSynth({
+        attackNoise: 0.7,
+        resonance: 0.95,
+        dampening: 4000,
+      }).connect(volumeRef.current);
+
+      synths.push(synth);
+
+      // Schedule all notes in this track
+      track.notes.forEach((note) => {
+        const eventId = Tone.Transport.schedule(() => {
+          synth.triggerAttackRelease(
+            note.name,
+            note.duration,
+            Tone.now(),
+            note.velocity / 127 // Normalize velocity from 0-127 to 0-1
+          );
+        }, startTime + note.time);
+
+        eventIds.push(eventId);
       });
+    });
+
+    synthsRef.current = synths;
+    scheduledEventsRef.current = eventIds;
+
+    // Schedule loop restart - reschedule all notes when the song ends
+    const loopEventId = Tone.Transport.schedule(() => {
+      if (midiRef.current) {
+        scheduleMidiPlayback(Tone.Transport.now());
+      }
+    }, startTime + midi.duration);
+
+    loopIdRef.current = loopEventId;
+  }, [clearScheduledEvents]);
+
+  const startMusic = useCallback(async () => {
+    if (!isInitialized) {
+      console.log("Music not initialized yet");
+      return;
+    }
+
+    if (!midiRef.current) {
+      console.error("MIDI file not loaded");
       return;
     }
 
@@ -103,81 +206,15 @@ export const useChineseBackgroundMusic = (enabled = true, volume = -25) => {
         Tone.Transport.start();
       }
 
-      // Generate a random melodic pattern using Chinese pentatonic scale
-      // This creates a unique melody for each game while maintaining musical coherence
-      const generateRandomPattern = () => {
-        const patternLength = 10 + Math.floor(Math.random() * 6); // 10-15 notes
-        const pattern = [];
+      // Schedule MIDI playback starting from current Transport time
+      scheduleMidiPlayback(Tone.Transport.now());
 
-        // Start with a lower note for a peaceful beginning
-        let currentIndex = Math.floor(Math.random() * 3); // 0-2 (C4, D4, or E4)
-        pattern.push(CHINESE_PENTATONIC_SCALE[currentIndex]);
-
-        for (let i = 1; i < patternLength; i++) {
-          // Move up or down by 1-3 steps in the scale (keeps it musical)
-          const step = Math.floor(Math.random() * 3) - 1; // -1, 0, or 1
-          const nextIndex = Math.max(
-            0,
-            Math.min(CHINESE_PENTATONIC_SCALE.length - 1, currentIndex + step)
-          );
-
-          // Occasionally jump to a higher or lower octave for variety
-          if (Math.random() < 0.2) {
-            const octaveJump = Math.random() < 0.5 ? -5 : 5;
-            const jumpIndex = Math.max(
-              0,
-              Math.min(
-                CHINESE_PENTATONIC_SCALE.length - 1,
-                nextIndex + octaveJump
-              )
-            );
-            pattern.push(CHINESE_PENTATONIC_SCALE[jumpIndex]);
-            currentIndex = jumpIndex;
-          } else {
-            pattern.push(CHINESE_PENTATONIC_SCALE[nextIndex]);
-            currentIndex = nextIndex;
-          }
-        }
-
-        // End with a return to lower notes for a peaceful conclusion
-        pattern.push(CHINESE_PENTATONIC_SCALE[Math.floor(Math.random() * 3)]);
-        pattern.push(CHINESE_PENTATONIC_SCALE[0]); // Always end on C4
-
-        return pattern;
-      };
-
-      const pattern = generateRandomPattern();
-
-      // Create a sequence that loops with longer note durations
-      const sequence = new Tone.Sequence(
-        (time, note) => {
-          if (synthRef.current) {
-            // Use longer note durations for a more meditative feel
-            synthRef.current.triggerAttackRelease(note, "4n", time);
-          }
-        },
-        pattern,
-        "2n" // Play every half note for slower tempo
-      );
-
-      sequence.start(0);
-      sequenceRef.current = sequence;
       setIsPlaying(true);
       console.log("Chinese background music started");
     } catch (error) {
       console.error("Failed to start Chinese background music:", error);
     }
-  }, [isInitialized, isPlaying]);
-
-  const stopMusic = useCallback(() => {
-    if (sequenceRef.current) {
-      sequenceRef.current.stop();
-      sequenceRef.current.dispose();
-      sequenceRef.current = null;
-    }
-    setIsPlaying(false);
-    console.log("Chinese background music stopped");
-  }, []);
+  }, [isInitialized, isPlaying, scheduleMidiPlayback]);
 
   const setVolume = useCallback((newVolume) => {
     if (volumeRef.current) {

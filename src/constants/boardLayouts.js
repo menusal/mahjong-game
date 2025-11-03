@@ -78,8 +78,8 @@ const createLayoutHole = () => {
 };
 
 export const BOARD_LAYOUTS = [
-  { name: "LAYOUT_SIMPLE_PYRAMID", layout: createLayoutSimplePyramid() },
   { name: "LAYOUT_FOUR_CORNERS", layout: createLayoutFourCorners() },
   { name: "LAYOUT_ARENA", layout: createLayoutArena() },
   { name: "LAYOUT_HOLE", layout: createLayoutHole() },
+  { name: "LAYOUT_SIMPLE_PYRAMID", layout: createLayoutSimplePyramid() },
 ];
