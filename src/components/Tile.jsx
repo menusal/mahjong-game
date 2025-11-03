@@ -82,7 +82,7 @@ const Tile = React.memo(
       <div style={style} className={classes} onClick={handleClick}>
         <span
           className={`flex items-center justify-center h-full w-full ${faceColor}`}
-          style={{ fontSize: "10vh", paddingBottom: "2.0vh" }}
+          style={{ fontSize: "7vh", paddingBottom: "2.5vh" }}
         >
           {faceContent}
         </span>
