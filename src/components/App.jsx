@@ -65,7 +65,7 @@ const App = () => {
   }, [gameState, isPlaying, isInitialized, startMusic, stopMusic]);
 
   const handleTileClick = useCallback(
-    (id) => {
+    async (id) => {
       if (gameState !== GAME_STATES.PLAYING) return;
 
       setHint(null);
@@ -108,7 +108,7 @@ const App = () => {
           const remainingTiles = newBoard.filter((t) => !t.isMatched).length;
           if (remainingTiles === 0) {
             setGameState(GAME_STATES.WON);
-            playWinSound();
+            await playWinSound();
             triggerWinConfetti();
           } else {
             const hasMoves = checkForMoves(newBoard);
