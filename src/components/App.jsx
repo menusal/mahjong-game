@@ -49,7 +49,7 @@ const App = () => {
   const { triggerConfetti, triggerWinConfetti } = useConfetti();
 
   const { startMusic, stopMusic, isPlaying, isInitialized } =
-    useChineseBackgroundMusic(true, -25);
+    useChineseBackgroundMusic(true, 0);
 
   const [motivationalWord, setMotivationalWord] = useState(null);
   const [hintsRemaining, setHintsRemaining] = useState(3);
@@ -93,7 +93,7 @@ const App = () => {
         const selectedTile = board.find((t) => t.id === selectedId);
 
         if (areTilesMatch(selectedTile.tile, clickedTile.tile)) {
-          playMatchSound();
+          await playMatchSound();
 
           const word = getRandomMotivationalWord();
           setMotivationalWord(word);
@@ -126,8 +126,8 @@ const App = () => {
             }
           }
         } else {
-          playErrorSound();
-          setSelectedId(id);
+          await playErrorSound();
+          setSelectedId(null);
         }
       }
     },
