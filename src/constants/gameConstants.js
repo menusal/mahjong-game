@@ -21,4 +21,4 @@ export const TILE_TYPES = {
 export const TILE_WIDTH = 7;
 export const TILE_HEIGHT = 5;
 export const TILE_OFFSET_X = TILE_WIDTH / 2.5;
-export const TILE_OFFSET_Y = TILE_HEIGHT / 2.5;
+export const TILE_OFFSET_Y = TILE_HEIGHT / 2.8;

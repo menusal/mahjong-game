@@ -24,13 +24,22 @@ const Tile = React.memo(
       return `3px 3px 8px rgba(0,0,0,0.5), 1px 1px 4px rgba(0,0,0,0.3)`;
     };
 
+    const tileWidthPercent = (TILE_WIDTH / boardWidth) * 100;
+    const tileHeightPercent = (TILE_HEIGHT / boardHeight) * 100 * 0.75; // Reducir altura al 75%
+
     const style = {
       left: `${((x * TILE_OFFSET_X) / boardWidth) * 100}%`,
       top: `${((y * TILE_OFFSET_Y) / boardHeight) * 100}%`,
-      width: `${(TILE_WIDTH / boardWidth) * 100}%`,
-      height: `${(TILE_HEIGHT / boardHeight) * 100}%`,
+      width: `${tileWidthPercent}%`,
+      height: `${tileHeightPercent}%`,
+      minWidth: `${tileWidthPercent}%`,
+      maxWidth: `${tileWidthPercent}%`,
+      minHeight: `${tileHeightPercent}%`,
+      maxHeight: `${tileHeightPercent}%`,
       zIndex: z * 10 + y,
       boxShadow: getBoxShadow(),
+      boxSizing: "border-box",
+      overflow: "hidden",
       transition:
         "opacity 0.5s ease, transform 0.3s ease, box-shadow 0.2s ease",
       opacity: isMatched ? 0 : 1,
@@ -82,7 +91,13 @@ const Tile = React.memo(
       <div style={style} className={classes} onClick={handleClick}>
         <span
           className={`flex items-center justify-center h-full w-full ${faceColor}`}
-          style={{ fontSize: "7vh", paddingBottom: "2.5vh" }}
+          style={{
+            fontSize: "8vh",
+            paddingBottom: "2.5vh",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
         >
           {faceContent}
         </span>
