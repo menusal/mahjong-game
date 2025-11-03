@@ -1,21 +1,22 @@
-import React from 'react';
-import Tile from './Tile.jsx';
-import { calculateBoardDimensions } from '../utils/gameUtils.js';
-import { BOARD_LAYOUTS } from '../constants/boardLayouts.js';
+import React from "react";
+import Tile from "./Tile.jsx";
+import { calculateBoardDimensions } from "../utils/gameUtils.js";
+import { BOARD_LAYOUTS } from "../constants/boardLayouts.js";
 
 const GameBoard = ({ board, onTileClick, selectedId, hint, level }) => {
   const layoutData = BOARD_LAYOUTS[(level - 1) % BOARD_LAYOUTS.length];
   const currentLayout = layoutData ? layoutData.layout : [];
-  const { width: boardWidth, height: boardHeight } = calculateBoardDimensions(currentLayout);
-  
+  const { width: boardWidth, height: boardHeight } =
+    calculateBoardDimensions(currentLayout);
+
   return (
-    <div 
-      className="flex items-center justify-center w-full rounded-lg bg-gray-700 shadow-inner transition-all duration-500 mt-4"
-      style={{ 
-        height: '85vh',
+    <div
+      className="flex items-center justify-center w-full rounded-lg felt-mat shadow-inner transition-all duration-500 mt-4"
+      style={{
+        height: "85vh",
         aspectRatio: `${boardWidth + 4} / ${boardHeight + 4}`,
-        maxWidth: '100%',
-        padding: '1.5vmin'
+        maxWidth: "100%",
+        padding: "1.5vmin",
       }}
     >
       <div className="relative w-full h-full">
@@ -24,8 +25,8 @@ const GameBoard = ({ board, onTileClick, selectedId, hint, level }) => {
             Cargando...
           </div>
         )}
-        
-        {board.map(boardTile => (
+
+        {board.map((boardTile) => (
           <Tile
             key={boardTile.id}
             boardTile={boardTile}
@@ -42,4 +43,3 @@ const GameBoard = ({ board, onTileClick, selectedId, hint, level }) => {
 };
 
 export default GameBoard;
-
