@@ -14,6 +14,7 @@ export const useChineseBackgroundMusic = (enabled = true, volume = -25) => {
   const synthsRef = useRef([]);
   const scheduledEventsRef = useRef([]);
   const loopIdRef = useRef(null);
+  const isPlayingRef = useRef(false);
 
   useEffect(() => {
     if (!enabled) return;
@@ -77,8 +78,10 @@ export const useChineseBackgroundMusic = (enabled = true, volume = -25) => {
 
       // Stop and dispose all synths
       synthsRef.current.forEach((synth) => {
-        synth.releaseAll();
-        synth.dispose();
+        // PluckSynth doesn't have releaseAll, just dispose
+        if (synth && typeof synth.dispose === 'function') {
+          synth.dispose();
+        }
       });
       synthsRef.current = [];
 
@@ -106,8 +109,10 @@ export const useChineseBackgroundMusic = (enabled = true, volume = -25) => {
 
     // Stop and dispose all synths
     synthsRef.current.forEach((synth) => {
-      synth.releaseAll();
-      synth.dispose();
+      // PluckSynth doesn't have releaseAll, just dispose
+      if (synth && typeof synth.dispose === 'function') {
+        synth.dispose();
+      }
     });
     synthsRef.current = [];
 
@@ -119,6 +124,7 @@ export const useChineseBackgroundMusic = (enabled = true, volume = -25) => {
   }, []);
 
   const stopMusic = useCallback(() => {
+    isPlayingRef.current = false;
     clearScheduledEvents();
     setIsPlaying(false);
     console.log("Chinese background music stopped");
@@ -137,6 +143,13 @@ export const useChineseBackgroundMusic = (enabled = true, volume = -25) => {
     const synths = [];
     const eventIds = [];
 
+    // Ensure startTime is in the future and greater than current Transport time
+    const currentTransportTime = Tone.Transport.now();
+    const safeStartTime = Math.max(startTime, currentTransportTime + 0.01);
+
+    // Track the last scheduled time to ensure strictly increasing times
+    let lastScheduledTime = safeStartTime;
+
     // Create a synth for each track
     midi.tracks.forEach((track, trackIndex) => {
       if (track.notes.length === 0) return; // Skip empty tracks
@@ -151,7 +164,18 @@ export const useChineseBackgroundMusic = (enabled = true, volume = -25) => {
       synths.push(synth);
 
       // Schedule all notes in this track
-      track.notes.forEach((note) => {
+      // Sort notes by time to ensure events are scheduled in order
+      const sortedNotes = [...track.notes].sort((a, b) => a.time - b.time);
+      
+      sortedNotes.forEach((note) => {
+        let noteTime = safeStartTime + note.time;
+        
+        // Ensure each note time is strictly greater than previous scheduled time
+        if (noteTime <= lastScheduledTime) {
+          noteTime = lastScheduledTime + 0.001; // Small epsilon to ensure strictly greater
+        }
+        lastScheduledTime = noteTime;
+        
         const eventId = Tone.Transport.schedule(() => {
           synth.triggerAttackRelease(
             note.name,
@@ -159,7 +183,7 @@ export const useChineseBackgroundMusic = (enabled = true, volume = -25) => {
             Tone.now(),
             note.velocity / 127 // Normalize velocity from 0-127 to 0-1
           );
-        }, startTime + note.time);
+        }, noteTime);
 
         eventIds.push(eventId);
       });
@@ -169,11 +193,16 @@ export const useChineseBackgroundMusic = (enabled = true, volume = -25) => {
     scheduledEventsRef.current = eventIds;
 
     // Schedule loop restart - reschedule all notes when the song ends
+    // Use a small offset to ensure next start time is strictly greater
+    const loopEndTime = Math.max(lastScheduledTime + 0.01, safeStartTime + midi.duration);
     const loopEventId = Tone.Transport.schedule(() => {
-      if (midiRef.current) {
-        scheduleMidiPlayback(Tone.Transport.now());
+      // Only continue looping if we're still supposed to be playing
+      if (midiRef.current && isPlayingRef.current) {
+        // Get current time and add a small buffer to ensure strictly greater
+        const nextStartTime = Tone.Transport.now() + 0.01;
+        scheduleMidiPlayback(nextStartTime);
       }
-    }, startTime + midi.duration);
+    }, loopEndTime);
 
     loopIdRef.current = loopEventId;
   }, [clearScheduledEvents]);
@@ -207,6 +236,7 @@ export const useChineseBackgroundMusic = (enabled = true, volume = -25) => {
       }
 
       // Schedule MIDI playback starting from current Transport time
+      isPlayingRef.current = true;
       scheduleMidiPlayback(Tone.Transport.now());
 
       setIsPlaying(true);

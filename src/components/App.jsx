@@ -52,6 +52,14 @@ const App = () => {
     useChineseBackgroundMusic(true, -25);
 
   const [motivationalWord, setMotivationalWord] = useState(null);
+  const [hintsRemaining, setHintsRemaining] = useState(3);
+
+  // Reset hints when starting a new level or restarting
+  useEffect(() => {
+    if (gameState === GAME_STATES.START) {
+      setHintsRemaining(3);
+    }
+  }, [level, gameState]);
 
   // Start music when game starts playing and music is initialized
   useEffect(() => {
@@ -144,40 +152,8 @@ const App = () => {
     ]
   );
 
-  const handleUndo = useCallback(() => {
-    if (moveHistory.length === 0) return;
-
-    playUndoSound();
-
-    const lastMove = moveHistory[moveHistory.length - 1];
-    const newHistory = moveHistory.slice(0, -1);
-
-    let newBoard = board.map((t) => {
-      if (t.id === lastMove[0] || t.id === lastMove[1]) {
-        return { ...t, isMatched: false };
-      }
-      return t;
-    });
-
-    newBoard = updateSelectable(newBoard);
-    setBoard(newBoard);
-    setMoveHistory(newHistory);
-    setSelectedId(null);
-    setGameState(GAME_STATES.PLAYING);
-    setHint(null);
-  }, [
-    board,
-    moveHistory,
-    playUndoSound,
-    setBoard,
-    setMoveHistory,
-    setSelectedId,
-    setGameState,
-    setHint,
-  ]);
-
   const handleHint = useCallback(() => {
-    if (gameState !== GAME_STATES.PLAYING) return;
+    if (gameState !== GAME_STATES.PLAYING || hintsRemaining <= 0) return;
 
     const selectableTiles = board.filter((t) => t.isSelectable && !t.isMatched);
 
@@ -186,6 +162,7 @@ const App = () => {
         if (areTilesMatch(selectableTiles[i].tile, selectableTiles[j].tile)) {
           setHint([selectableTiles[i].id, selectableTiles[j].id]);
           setTimeout(() => setHint(null), 1500);
+          setHintsRemaining((prev) => Math.max(0, prev - 1));
           return;
         }
       }
@@ -194,8 +171,16 @@ const App = () => {
     if (selectableTiles.length > 0) {
       playShuffleSound();
       handleShuffleRemaining(board);
+      setHintsRemaining((prev) => Math.max(0, prev - 1));
     }
-  }, [board, gameState, playShuffleSound, handleShuffleRemaining, setHint]);
+  }, [
+    board,
+    gameState,
+    hintsRemaining,
+    playShuffleSound,
+    handleShuffleRemaining,
+    setHint,
+  ]);
 
   const handleStartGameWithAudio = useCallback(async () => {
     await startAudioContext();
@@ -250,17 +235,12 @@ const App = () => {
         />
 
         <GameControls
-          onRestart={handleRestart}
-          onUndo={handleUndo}
           onHint={handleHint}
-          canUndo={moveHistory.length > 0 && gameState === GAME_STATES.PLAYING}
-          canHint={gameState === GAME_STATES.PLAYING}
+          canHint={gameState === GAME_STATES.PLAYING && hintsRemaining > 0}
+          hintsRemaining={hintsRemaining}
+          level={level}
+          remainingTiles={board.filter((t) => !t.isMatched).length}
         />
-
-        <div className="mt-4 text-base text-gray-400">
-          Nivel: {level} | Fichas restantes:{" "}
-          {board.filter((t) => !t.isMatched).length}
-        </div>
       </div>
     </div>
   );
