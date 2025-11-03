@@ -92,10 +92,10 @@ export const useSoundEffects = () => {
     }
   }, [synth]);
   
-  const startAudioContext = useCallback(() => {
+  const startAudioContext = useCallback(async () => {
     if (synth && Tone.context.state !== 'running') {
       try {
-        Tone.start();
+        await Tone.start();
       } catch (e) {
         console.error("Failed to start Tone context", e);
       }
